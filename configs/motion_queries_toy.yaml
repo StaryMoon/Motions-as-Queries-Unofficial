@@ -1,0 +1,10 @@
+seed: 2026
+batch_size: 2
+frames: 8
+image_size: 64
+image_channels: 3
+num_queries: 3
+embed_dim: 128
+pose_dim: 34
+learning_rate: 0.0002
+steps: 1000
