@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite the original paper."
+title: "Motions as Queries: One-Stage Multi-Person Holistic Human Motion Capture"
+type: software
+authors:
+  - family-names: Liu
+    given-names: Minghao
+repository-code: "https://github.com/StaryMoon/Motions-as-Queries-Unofficial"
+license: MIT
+preferred-citation:
+  type: conference-paper
+  title: "Motions as Queries: One-Stage Multi-Person Holistic Human Motion Capture"
+  authors:
+  - family-names: Liu
+    given-names: Kenkun
+  - family-names: Fu
+    given-names: Yurong
+  - family-names: Yuan
+    given-names: Weihao
+  - family-names: Lin
+    given-names: Jing
+  - family-names: Li
+    given-names: Peihao
+  - family-names: Gu
+    given-names: Xiaodong
+  - family-names: Qiu
+    given-names: Lingteng
+  - family-names: Wang
+    given-names: Haoqian
+  - family-names: Dong
+    given-names: Zilong
+  - family-names: Han
+    given-names: Xiaoguang
+  conference: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+  year: 2025
+  url: "https://openaccess.thecvf.com/content/CVPR2025/html/Liu_Motions_as_Queries_One-Stage_Multi-Person_Holistic_Human_Motion_Capture_CVPR_2025_paper.html"

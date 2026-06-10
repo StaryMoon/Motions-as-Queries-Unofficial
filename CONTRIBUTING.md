@@ -1,15 +1,5 @@
 # Contributing
 
-This is an unofficial reproduction starter. Please keep claims precise:
+Contributions are welcome. Useful pull requests include paper-faithful modules, dataset converters, training scripts, evaluation scripts, documentation fixes, and links to verified reproduction logs.
 
-- Do not claim official status.
-- Do not claim reproduced numbers unless the benchmark was actually run.
-- Include commands and dataset details for experiments.
-
-Useful contributions:
-
-- variable-person matching
-- video dataset loader
-- whole-body pose adapter
-- visualization scripts
-- tracking / pose metrics
+Please keep large datasets, checkpoints, and generated outputs outside git. For experiment results, include the config, dataset split, command, metric definition, and hardware information when possible.

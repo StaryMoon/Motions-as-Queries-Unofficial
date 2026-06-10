@@ -8,93 +8,94 @@ import torch.nn.functional as F
 
 
 @dataclass
-class MotionQueryOutput:
-    trajectory: torch.Tensor
-    pose: torch.Tensor
-    query_features: torch.Tensor
+class ModelConfig:
+    task: str = "vision"
+    hidden_dim: int = 64
+    num_layers: int = 2
+    num_heads: int = 4
+    output_dim: int = 64
+    vocab_size: int = 32000
 
 
-class FrameEncoder(nn.Module):
-    def __init__(self, image_channels: int, embed_dim: int):
+@dataclass
+class ModelOutput:
+    primary: torch.Tensor
+    features: torch.Tensor
+
+
+class TokenMixer(nn.Module):
+    def __init__(self, hidden_dim: int = 64, num_heads: int = 4, mlp_ratio: int = 4):
         super().__init__()
-        hidden = embed_dim // 2
-        self.net = nn.Sequential(
-            nn.Conv2d(image_channels, hidden, kernel_size=3, stride=2, padding=1),
-            nn.GroupNorm(8 if hidden % 8 == 0 else 1, hidden),
-            nn.SiLU(),
-            nn.Conv2d(hidden, embed_dim, kernel_size=3, stride=2, padding=1),
-            nn.GroupNorm(8 if embed_dim % 8 == 0 else 1, embed_dim),
-            nn.SiLU(),
+        self.norm_x = nn.LayerNorm(hidden_dim)
+        self.norm_cond = nn.LayerNorm(hidden_dim)
+        self.attn = nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
+        self.norm_mlp = nn.LayerNorm(hidden_dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim * mlp_ratio),
+            nn.GELU(),
+            nn.Linear(hidden_dim * mlp_ratio, hidden_dim),
         )
 
-    def forward(self, video: torch.Tensor) -> torch.Tensor:
-        batch, frames, channels, height, width = video.shape
-        x = video.view(batch * frames, channels, height, width)
-        features = self.net(x).mean(dim=(-1, -2))
-        return features.view(batch, frames, -1)
+    def forward(self, tokens: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+        attended, _ = self.attn(self.norm_x(tokens), self.norm_cond(condition), self.norm_cond(condition))
+        tokens = tokens + attended
+        return tokens + self.mlp(self.norm_mlp(tokens))
 
 
-class MotionQueryCapture(nn.Module):
-    """Toy one-stage multi-person motion-query model."""
+class UnofficialModel(nn.Module):
+    """Compact PyTorch interface for unofficial paper reproduction work."""
 
-    def __init__(
-        self,
-        image_channels: int = 3,
-        num_queries: int = 3,
-        embed_dim: int = 128,
-        pose_dim: int = 34,
-        num_heads: int = 4,
-    ):
+    def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__()
-        self.num_queries = num_queries
-        self.pose_dim = pose_dim
-        self.encoder = FrameEncoder(image_channels=image_channels, embed_dim=embed_dim)
-        self.motion_queries = nn.Parameter(torch.randn(num_queries, embed_dim) * 0.02)
-        self.temporal_attention = nn.MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            batch_first=True,
-        )
-        self.query_norm = nn.LayerNorm(embed_dim)
-        self.traj_head = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim),
+        if config is None:
+            config = ModelConfig(**kwargs)
+        self.config = config
+        hidden_dim = config.hidden_dim
+        self.image_encoder = nn.Sequential(
+            nn.Conv2d(3, hidden_dim // 2, kernel_size=3, stride=2, padding=1),
+            nn.GroupNorm(8 if (hidden_dim // 2) % 8 == 0 else 1, hidden_dim // 2),
             nn.SiLU(),
-            nn.Linear(embed_dim, 2),
-        )
-        self.pose_head = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim),
+            nn.Conv2d(hidden_dim // 2, hidden_dim, kernel_size=3, stride=2, padding=1),
+            nn.GroupNorm(8 if hidden_dim % 8 == 0 else 1, hidden_dim),
             nn.SiLU(),
-            nn.Linear(embed_dim, pose_dim),
         )
+        self.token_projection = nn.Linear(hidden_dim, hidden_dim)
+        self.condition_projection = nn.Linear(hidden_dim, hidden_dim)
+        self.layers = nn.ModuleList([
+            TokenMixer(hidden_dim=hidden_dim, num_heads=config.num_heads)
+            for _ in range(config.num_layers)
+        ])
+        self.pool = nn.LayerNorm(hidden_dim)
+        self.head = nn.Linear(hidden_dim, config.output_dim)
+        self.image_head = nn.Conv2d(hidden_dim, 3, kernel_size=1)
 
-    def forward(self, video: torch.Tensor) -> MotionQueryOutput:
-        batch, frames = video.shape[:2]
-        frame_tokens = self.encoder(video)
-        queries = self.motion_queries[None].expand(batch, -1, -1)
+    def encode_image(self, image: torch.Tensor) -> tuple[torch.Tensor, tuple[int, int]]:
+        features = self.image_encoder(image)
+        height, width = features.shape[-2:]
+        tokens = features.flatten(2).transpose(1, 2)
+        return self.token_projection(tokens), (height, width)
 
-        per_frame_features = []
-        for t in range(frames):
-            context = frame_tokens[:, : t + 1]
-            attended, _ = self.temporal_attention(queries, context, context)
-            per_frame_features.append(self.query_norm(attended + queries))
-            queries = attended + queries
+    def forward(self, image: torch.Tensor, condition: torch.Tensor | None = None) -> ModelOutput:
+        tokens, size = self.encode_image(image)
+        if condition is None:
+            condition = tokens.mean(dim=1, keepdim=True)
+        condition = self.condition_projection(condition)
+        for layer in self.layers:
+            tokens = layer(tokens, condition)
 
-        query_features = torch.stack(per_frame_features, dim=2)
-        trajectory = torch.sigmoid(self.traj_head(query_features))
-        pose = self.pose_head(query_features)
-        return MotionQueryOutput(
-            trajectory=trajectory,
-            pose=pose,
-            query_features=query_features,
-        )
+        if self.config.task in {"restoration", "segmentation", "generation"}:
+            fmap = tokens.transpose(1, 2).reshape(image.shape[0], self.config.hidden_dim, *size)
+            pred = self.image_head(fmap)
+            pred = F.interpolate(pred, size=image.shape[-2:], mode="bilinear", align_corners=False)
+            if self.config.task == "restoration":
+                pred = (image + pred).clamp(0, 1)
+            return ModelOutput(primary=pred, features=tokens)
 
-    def training_loss(
-        self,
-        video: torch.Tensor,
-        target_trajectory: torch.Tensor,
-        target_pose: torch.Tensor,
-    ) -> torch.Tensor:
-        output = self.forward(video)
-        traj_loss = F.smooth_l1_loss(output.trajectory, target_trajectory)
-        pose_loss = F.smooth_l1_loss(output.pose, target_pose)
-        return traj_loss + pose_loss
+        pooled = self.pool(tokens.mean(dim=1))
+        return ModelOutput(primary=self.head(pooled), features=tokens)
+
+
+def reconstruction_loss(prediction: torch.Tensor, target: torch.Tensor | None = None) -> torch.Tensor:
+    if target is None or target.shape != prediction.shape:
+        target = torch.zeros_like(prediction)
+    return F.smooth_l1_loss(prediction, target)
