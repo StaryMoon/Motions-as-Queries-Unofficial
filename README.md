@@ -14,6 +14,25 @@
 
 > This is an **unofficial** implementation maintained by [@StaryMoon](https://github.com/StaryMoon). If this repository helps your reading, reproduction, or course project, please consider giving it a star and following my GitHub profile.
 
+## Paper / Project Preview
+
+<p align="center">
+  <img src="assets/paper-preview.png" alt="Motions-as-Queries-Unofficial paper or project page preview" width="900">
+</p>
+
+<sub>Image source: public paper/project page screenshot, [Paper](https://openaccess.thecvf.com/content/CVPR2025/html/Liu_Motions_as_Queries_One-Stage_Multi-Person_Holistic_Human_Motion_Capture_CVPR_2025_paper.html). Captured/organized on 2026-07-02. This repository is unofficial and is not affiliated with the paper authors.</sub>
+
+## At a Glance
+
+| Item | Details |
+|---|---|
+| Paper | Motions as Queries: One-Stage Multi-Person Holistic Human Motion Capture |
+| Venue / Source | CVPR 2025 |
+| Focus | This repository organizes a PyTorch implementation for Motions as Queries: One-Stage Multi-Person Holistic Human Motion Capture, focusing on one-stage multi-person holistic moti... |
+| Repository type | Unofficial PyTorch reproduction starter |
+| Local entry point | `python scripts/smoke_test.py` |
+
+
 ## News
 
 - **2026-06-10**: Repository upgraded with an official-style README, paper citation metadata, cleaner package interfaces, default configuration, and release-ready project structure.
